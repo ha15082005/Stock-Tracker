@@ -1,103 +1,282 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
+import { Navigation } from '@/src/components/navigation';
+import { StockCard } from '@/src/components/stock-card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/card';
+import { Input } from '@/src/components/ui/input';
+import { Button } from '@/src/components/ui/button';
+import { Search, TrendingUp, TrendingDown, DollarSign, BarChart3, RefreshCw } from 'lucide-react';
+import { useSession } from 'next-auth/react';
+import { useState, useEffect } from 'react';
+import { formatCurrency, formatPercentage } from '@/src/lib/utils';
+import { useStocks, useStockSearch, useMarketSummary, useRefreshStocks } from '@/src/hooks/useStocks';
+import { StockData } from '@/src/lib/stock-service';
+
+// Default stocks to display
+const defaultStocks = ['AAPL', 'GOOGL', 'MSFT', 'TSLA', 'AMZN', 'NVDA'];
+
+export default function Dashboard() {
+  const { data: session } = useSession();
+  const [searchTerm, setSearchTerm] = useState('');
+  const [displayedStocks, setDisplayedStocks] = useState(defaultStocks);
+
+  // Fetch stock data
+  const { data: stocks = [], isLoading: stocksLoading, error: stocksError } = useStocks(displayedStocks);
+  
+  // Search functionality
+  const { data: searchResults = [], isLoading: searchLoading } = useStockSearch(searchTerm);
+  
+  // Market summary
+  const { data: marketSummary, isLoading: marketSummaryLoading } = useMarketSummary();
+  
+  // Refresh functionality
+  const refreshStocks = useRefreshStocks();
+
+  // Handle search
+  useEffect(() => {
+    if (searchTerm.trim() === '') {
+      setDisplayedStocks(defaultStocks);
+    } else if (searchResults.length > 0) {
+      setDisplayedStocks(searchResults.map(stock => stock.symbol));
+    }
+  }, [searchTerm, searchResults]);
+
+  // Calculate market overview
+  const totalMarketCap = stocks.reduce((sum, stock) => sum + (stock.marketCap || 0), 0);
+  const gainers = stocks.filter(stock => stock.change > 0).length;
+  const losers = stocks.filter(stock => stock.change < 0).length;
+
+  // Handle refresh
+  const handleRefresh = () => {
+    refreshStocks.mutate(displayedStocks);
+  };
+
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+    <div className="min-h-screen bg-gray-50">
+      <Navigation />
+      
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            Welcome back{session?.user?.name ? `, ${session.user.name}` : ''}!
+          </h1>
+          <p className="text-gray-600">
+            Track your favorite stocks with real-time market data powered by Yahoo Finance.
+          </p>
         </div>
+
+        {/* Market Overview Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Market Cap</CardTitle>
+              <DollarSign className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {stocksLoading ? 'Loading...' : `$${(totalMarketCap / 1e12).toFixed(2)}T`}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Across tracked stocks
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Gainers</CardTitle>
+              <TrendingUp className="h-4 w-4 text-green-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-green-600">
+                {stocksLoading ? '...' : gainers}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Stocks in positive territory
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Losers</CardTitle>
+              <TrendingDown className="h-4 w-4 text-red-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-red-600">
+                {stocksLoading ? '...' : losers}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Stocks in negative territory
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Stocks</CardTitle>
+              <BarChart3 className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {stocksLoading ? '...' : stocks.length}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Stocks being tracked
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Search and Refresh */}
+        <div className="mb-6 flex flex-col sm:flex-row gap-4">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <Input
+              placeholder="Search stocks by symbol (e.g., AAPL, TSLA)..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <Button
+            onClick={handleRefresh}
+            disabled={refreshStocks.isPending || stocksLoading}
+            className="flex items-center space-x-2"
+          >
+            <RefreshCw className={`h-4 w-4 ${refreshStocks.isPending ? 'animate-spin' : ''}`} />
+            <span>Refresh</span>
+          </Button>
+        </div>
+
+        {/* Error Handling */}
+        {stocksError && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-red-800">
+              Error loading stock data. Please try refreshing or check your connection.
+            </p>
+          </div>
+        )}
+
+        {/* Stock Grid */}
+        {stocksLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[...Array(6)].map((_, i) => (
+              <Card key={i} className="animate-pulse">
+                <CardHeader className="pb-3">
+                  <div className="h-6 bg-gray-200 rounded w-1/3 mb-2"></div>
+                  <div className="h-4 bg-gray-200 rounded w-2/3"></div>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-8 bg-gray-200 rounded w-1/2 mb-4"></div>
+                  <div className="h-4 bg-gray-200 rounded w-1/3"></div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : stocks.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {stocks.map((stock) => (
+              <StockCard
+                key={stock.symbol}
+                {...stock}
+                onAddToWatchlist={(symbol) => console.log(`Added ${symbol} to watchlist`)}
+                onRemoveFromWatchlist={(symbol) => console.log(`Removed ${symbol} from watchlist`)}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-12">
+            <p className="text-gray-500">
+              {searchTerm ? 'No stocks found matching your search.' : 'No stocks available.'}
+            </p>
+          </div>
+        )}
+
+        {/* Market Summary Section */}
+        {marketSummary && !marketSummaryLoading && (
+          <div className="mt-12">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">Market Summary</h2>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Top Gainers */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-green-600">Top Gainers</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {marketSummary.gainers.map((stock: StockData) => (
+                      <div key={stock.symbol} className="flex justify-between items-center">
+                        <div>
+                          <div className="font-medium">{stock.symbol}</div>
+                          <div className="text-sm text-gray-600">{stock.name}</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-medium">{formatCurrency(stock.currentPrice)}</div>
+                          <div className="text-sm text-green-600">
+                            +{formatPercentage(stock.changePercent)}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Top Losers */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-red-600">Top Losers</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {marketSummary.losers.map((stock: StockData) => (
+                      <div key={stock.symbol} className="flex justify-between items-center">
+                        <div>
+                          <div className="font-medium">{stock.symbol}</div>
+                          <div className="text-sm text-gray-600">{stock.name}</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-medium">{formatCurrency(stock.currentPrice)}</div>
+                          <div className="text-sm text-red-600">
+                            {formatPercentage(stock.changePercent)}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Most Active */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Most Active</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {marketSummary.mostActive.map((stock: StockData) => (
+                      <div key={stock.symbol} className="flex justify-between items-center">
+                        <div>
+                          <div className="font-medium">{stock.symbol}</div>
+                          <div className="text-sm text-gray-600">{stock.name}</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-medium">{formatCurrency(stock.currentPrice)}</div>
+                          <div className="text-sm text-gray-600">
+                            Vol: {stock.volume?.toLocaleString() || 'N/A'}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        )}
       </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
     </div>
   );
 }
