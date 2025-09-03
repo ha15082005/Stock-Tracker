@@ -6,14 +6,15 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const query = searchParams.get('q');
     
-    if (!query || query.trim().length === 0) {
+    if (!query) {
       return NextResponse.json(
-        { error: 'Search query is required' },
+        { error: 'Query parameter is required' },
         { status: 400 }
       );
     }
 
-    const stocks = await StockService.searchStocks(query.trim());
+    // Use the new comprehensive search function
+    const stocks = await StockService.searchStocks(query);
     
     return NextResponse.json({ stocks });
   } catch (error) {

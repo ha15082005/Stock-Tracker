@@ -93,30 +93,133 @@ export class StockService {
   }
 
   /**
-   * Search for stocks by name or symbol
+   * Search for stocks by name or symbol using multiple strategies
    */
   static async searchStocks(query: string): Promise<StockData[]> {
     try {
-      // yahoo-finance2 doesn't have a built-in search, so we'll use a predefined list
-      // In a real app, you might want to use a different API for search
-      const popularStocks = [
-        'AAPL', 'GOOGL', 'MSFT', 'TSLA', 'AMZN', 'NVDA', 'META', 'BRK-B',
-        'JPM', 'JNJ', 'V', 'PG', 'UNH', 'HD', 'MA', 'DIS', 'PYPL', 'ADBE'
-      ];
-      
-      const filteredStocks = popularStocks.filter(stock => 
-        stock.toLowerCase().includes(query.toLowerCase())
-      );
-      
-      if (filteredStocks.length === 0) {
+      if (!query || query.trim().length < 1) {
         return [];
       }
-      
-      return await this.getMultipleStocks(filteredStocks.slice(0, 5));
+
+      const searchQuery = query.trim().toUpperCase();
+      const results: StockData[] = [];
+
+      // Strategy 1: Direct symbol lookup (fastest)
+      if (searchQuery.length <= 5 && /^[A-Z]+$/.test(searchQuery)) {
+        try {
+          const stock = await this.getStockData(searchQuery);
+          results.push(stock);
+        } catch (error) {
+          // Symbol not found, continue to other strategies
+        }
+      }
+
+      // Strategy 2: Try common variations and exchanges
+      const variations = this.generateSymbolVariations(searchQuery);
+      for (const variation of variations) {
+        try {
+          const stock = await this.getStockData(variation);
+          if (!results.find(r => r.symbol === stock.symbol)) {
+            results.push(stock);
+          }
+        } catch (error) {
+          // Continue to next variation
+        }
+      }
+
+      // Strategy 3: Search by company name patterns
+      const namePatterns = this.generateNamePatterns(query);
+      for (const pattern of namePatterns) {
+        try {
+          const stock = await this.getStockData(pattern);
+          if (!results.find(r => r.symbol === stock.symbol)) {
+            results.push(stock);
+          }
+        } catch (error) {
+          // Continue to next pattern
+        }
+      }
+
+      // Strategy 4: Try with common exchange suffixes
+      const exchangeSuffixes = ['', '.TO', '.V', '.AX', '.L', '.PA', '.F', '.SW', '.MI'];
+      for (const suffix of exchangeSuffixes) {
+        const symbolWithSuffix = searchQuery + suffix;
+        try {
+          const stock = await this.getStockData(symbolWithSuffix);
+          if (!results.find(r => r.symbol === stock.symbol)) {
+            results.push(stock);
+          }
+        } catch (error) {
+          // Continue to next suffix
+        }
+      }
+
+      // Remove duplicates and limit results for performance
+      const uniqueResults = results.filter((stock, index, self) => 
+        index === self.findIndex(s => s.symbol === stock.symbol)
+      );
+
+      return uniqueResults.slice(0, 15); // Return up to 15 unique results
     } catch (error) {
       console.error('Error searching stocks:', error);
       return [];
     }
+  }
+
+  /**
+   * Generate symbol variations for better search coverage
+   */
+  private static generateSymbolVariations(symbol: string): string[] {
+    const variations: string[] = [];
+    
+    // Common variations
+    if (symbol.includes('-')) {
+      variations.push(symbol.replace('-', ''));
+      variations.push(symbol.replace('-', '.'));
+    }
+    
+    if (symbol.includes('.')) {
+      variations.push(symbol.replace('.', ''));
+      variations.push(symbol.replace('.', '-'));
+    }
+
+    // Add common prefixes/suffixes
+    if (symbol.length <= 3) {
+      variations.push(symbol + 'A');
+      variations.push(symbol + 'B');
+      variations.push(symbol + '1');
+    }
+
+    return variations;
+  }
+
+  /**
+   * Generate company name patterns for search
+   */
+  private static generateNamePatterns(companyName: string): string[] {
+    const patterns: string[] = [];
+    const words = companyName.toUpperCase().split(/\s+/);
+    
+    if (words.length >= 2) {
+      // First letter of each word
+      const acronym = words.map(word => word[0]).join('');
+      patterns.push(acronym);
+      
+      // First two letters of first word + first letter of second
+      if (words[0].length >= 2) {
+        patterns.push(words[0].substring(0, 2) + words[1][0]);
+      }
+    }
+    
+    // First 3-4 letters of first word
+    if (words[0].length >= 3) {
+      patterns.push(words[0].substring(0, 3));
+      if (words[0].length >= 4) {
+        patterns.push(words[0].substring(0, 4));
+      }
+    }
+
+    return patterns;
   }
 
   /**

@@ -61,8 +61,11 @@ export default function Dashboard() {
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
             Welcome back{session?.user?.name ? `, ${session.user.name}` : ''}!
           </h1>
-          <p className="text-gray-600">
+          <p className="text-gray-600 mb-4">
             Track your favorite stocks with real-time market data powered by Yahoo Finance.
+          </p>
+          <p className="text-sm text-blue-600 bg-blue-50 p-3 rounded-lg">
+            🔍 <strong>New!</strong> Search for ANY stock symbol - try "AAPL", "TSLA", "SPY", or any company name!
           </p>
         </div>
 
